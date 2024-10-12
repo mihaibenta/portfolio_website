@@ -4,6 +4,7 @@ import axios from "axios";
 import osmtogeojson from "osmtogeojson";
 import "./App.css";
 import L from "leaflet"; // Import Leaflet
+import CustomPopupModal from "./CustomPopupModal";
 
 const MapComponent = () => {
   const [highways, setHighways] = useState(null);
@@ -20,6 +21,8 @@ const MapComponent = () => {
   const [selectedBuildingId, setSelectedBuildingId] = useState(null); // Track selected building ID
   const [highwaysRerender, setHighwaysRerender] = useState(0); // For rerendering highways
   const [buildingsRerender, setBuildingsRerender] = useState(0); // For rerendering buildings
+  const [showCustomPopup, setShowCustomPopup] = useState(false);
+  const [selectedFeature, setSelectedFeature] = useState(null);
   const mapRef = useRef();
 
   // Store references to feature layers
@@ -33,7 +36,7 @@ const MapComponent = () => {
       setLoading(false);
     };
 
-    const fetchHighways = async () => {
+    const fetchHighways = async () => { 
       const overpassQuery = `
         [out:json];
         way["highway"](around:2000,46.7703,23.5902);
@@ -123,94 +126,91 @@ const bindPopupToFeature = (feature, layer, type) => {
   const highwayType = type === "highway" ? feature.properties.highway : "";
 
   const popupContent = `
-      <b>${name}</b><br>
-      Type: ${highwayType || "N/A"}<br>
-      <a href="${getOSMEditorUrl(osmType, osmId)}" target="_blank">Edit this ${type} on OSM</a>
+    <b>${name}</b><br>
+    Type: ${highwayType || "N/A"}<br>
+    <a href="${getOSMEditorUrl(osmType, osmId)}" target="_blank">Edit this ${type} on OSM</a>
   `;
 
   layer.bindPopup(popupContent);
 
   // Store the layer reference
   if (type === "highway") {
-      highwayLayersRef.current[feature.id] = layer;
-      if (selectedHighwayId === feature.id) {
-          layer.setStyle(getSelectedFeatureStyle()); // Apply selected style
-      } else {
-          layer.setStyle(getHighwayStyle(feature)); // Apply normal style
-      }
+    highwayLayersRef.current[feature.id] = layer;
+    if (selectedHighwayId === feature.id) {
+      layer.setStyle(getSelectedFeatureStyle()); // Apply selected style
+    } else {
+      layer.setStyle(getHighwayStyle(feature)); // Apply normal style
+    }
   } else if (type === "building") {
-      buildingLayersRef.current[feature.id] = layer;
-      if (selectedBuildingId === feature.id) {
-          layer.setStyle(getSelectedFeatureStyle()); // Apply selected style
-      } else {
-          layer.setStyle(getBuildingStyle()); // Apply normal style
-      }
+    buildingLayersRef.current[feature.id] = layer;
+    if (selectedBuildingId === feature.id) {
+      layer.setStyle(getSelectedFeatureStyle()); // Apply selected style
+    } else {
+      layer.setStyle(getBuildingStyle()); // Apply normal style
+    }
   }
 
   layer.on("mouseover", () => {
     if (
-        (type === "highway" && selectedHighwayId !== feature.id) ||
-        (type === "building" && selectedBuildingId !== feature.id)
+      (type === "highway" && selectedHighwayId !== feature.id) ||
+      (type === "building" && selectedBuildingId !== feature.id)
     ) {
-        layer.setStyle({ weight: 15 }); // Highlight on hover
+      layer.setStyle({ weight: 15 }); // Highlight on hover
     }
-});
+  });
 
-layer.on("mouseout", () => {
+  layer.on("mouseout", () => {
     if (
-        (type === "highway" && selectedHighwayId !== feature.id) ||
-        (type === "building" && selectedBuildingId !== feature.id)
+      (type === "highway" && selectedHighwayId !== feature.id) ||
+      (type === "building" && selectedBuildingId !== feature.id)
     ) {
-        layer.setStyle(type === "highway" ? getHighwayStyle(feature) : getBuildingStyle());
+      layer.setStyle(type === "highway" ? getHighwayStyle(feature) : getBuildingStyle());
     }
-});
+  });
 
   layer.on("click", () => {
     console.log("Layer clicked:", feature.id);
-    
+
     // Reset previous selection for highways
     if (type === "highway") {
-        if (selectedHighwayId && selectedHighwayId !== feature.id) {
-            const prevLayer = highwayLayersRef.current[selectedHighwayId];
-            if (prevLayer) {
-                prevLayer.setStyle(getHighwayStyle(prevLayer.feature)); // Reset previous highway style
-                prevLayer.redraw(); // Force redraw
-            }
+      if (selectedHighwayId && selectedHighwayId !== feature.id) {
+        const prevLayer = highwayLayersRef.current[selectedHighwayId];
+        if (prevLayer) {
+          prevLayer.setStyle(getHighwayStyle(prevLayer.feature)); // Reset previous highway style
+          prevLayer.redraw(); // Force redraw
         }
-        setSelectedHighwayId(feature.id);
-        console.log("Selected Highway ID:", feature.id);
+      }
+      setSelectedHighwayId(feature.id);
+      console.log("Selected Highway ID:", feature.id);
     }
     // Handle selection for buildings
     else if (type === "building") {
-        // Reset the style of the previously selected building
-        if (selectedBuildingId && selectedBuildingId !== feature.id) {
-            const prevLayer = buildingLayersRef.current[selectedBuildingId];
-            if (prevLayer) {
-                prevLayer.setStyle(getBuildingStyle(prevLayer.feature)); // Reset previous building style
-                prevLayer.redraw(); // Force redraw
-            }
+      // Reset the style of the previously selected building
+      if (selectedBuildingId && selectedBuildingId !== feature.id) {
+        const prevLayer = buildingLayersRef.current[selectedBuildingId];
+        if (prevLayer) {
+          prevLayer.setStyle(getBuildingStyle(prevLayer.feature)); // Reset previous building style
+          prevLayer.redraw(); // Force redraw
         }
-        // Set new selected building
-        setSelectedBuildingId(feature.id);
+      }
+      // Set new selected building
+      setSelectedBuildingId(feature.id);
 
-        // Set style for the currently selected building (turn it red)
-        const selectedLayer = buildingLayersRef.current[feature.id];
-        if (selectedLayer) {
-            selectedLayer.setStyle({
-                color: "#7e2e2e", // Keep black outline
-                weight: 2, // Maintain outline weight
-                fillColor: "#FF0000", // Red fill color for selected building
-                fillOpacity: 0.4, // High opacity for selected building
-            });
-            selectedLayer.redraw(); // Force redraw
-        }
-        console.log("Selected Building ID:", feature.id);
+      // Set style for the currently selected building (turn it red)
+      const selectedLayer = buildingLayersRef.current[feature.id];
+      if (selectedLayer) {
+        selectedLayer.setStyle({
+          color: "#7e2e2e", // Keep black outline
+          weight: 2, // Maintain outline weight
+          fillColor: "#FF0000", // Red fill color for selected building
+          fillOpacity: 0.4, // High opacity for selected building
+        });
+        selectedLayer.redraw(); // Force redraw
+      }
+      console.log("Selected Building ID:", feature.id);
     }
-});
-
-
+  });
 };
-
 
 
 const getHighwayStyle = (feature) => {
@@ -471,61 +471,95 @@ const getHighwayStyle = (feature) => {
 
   const openPopup = (feature, type) => {
     let layer;
-    
+  
+    console.log("openPopup called with feature:", feature, "and type:", type);
+  
     // Check if it's a highway and retrieve the corresponding layer
     if (type === "highway") {
-        layer = highwayLayersRef.current[feature.id];
+      layer = highwayLayersRef.current[feature.id];
   
-        // If a layer is found, continue with selection handling
-        if (layer) {
-            // Reset previous highway selection
-            if (selectedHighwayId && selectedHighwayId !== feature.id) {
-                const prevLayer = highwayLayersRef.current[selectedHighwayId];
-                if (prevLayer) {
-                    prevLayer.setStyle(getHighwayStyle(prevLayer.feature)); // Reset the previous layer's style
-                }
-            }
+      console.log("Highway layer:", layer);
   
-            // Update the selected highway ID
-            setSelectedHighwayId(feature.id);
-  
-            // Apply the selected style to the current layer
-            layer.setStyle(getSelectedFeatureStyle());
-  
-            // Explicitly open the popup
-            layer.openPopup();
-        } else {
-            console.error("Highway layer not found for feature:", feature.id);
+      // If a layer is found, continue with selection handling
+      if (layer) {
+        // Reset previous highway selection
+        if (selectedHighwayId && selectedHighwayId !== feature.id) {
+          const prevLayer = highwayLayersRef.current[selectedHighwayId];
+          if (prevLayer) {
+            prevLayer.setStyle(getHighwayStyle(prevLayer.feature)); // Reset the previous layer's style
+          }
         }
+  
+        // Update the selected highway ID
+        setSelectedHighwayId(feature.id);
+  
+        // Apply the selected style to the current layer
+        layer.setStyle(getSelectedFeatureStyle());
+  
+        // Create a new popup and set its position to the center of the feature's bounds
+        const popup = L.popup()
+          .setContent(getPopupContent(feature, type))
+          .setLatLng(layer.getBounds().getCenter())
+          .openOn(mapRef.current);
+  
+        // Store the popup reference for later use (optional)
+        layer.popup = popup;
+  
+        console.log("Popup opened for highway:", feature.id);
+      } else {
+        console.error("Highway layer not found for feature:", feature.id);
+      }
   
     // Check if it's a building and retrieve the corresponding layer
     } else if (type === "building") {
-        layer = buildingLayersRef.current[feature.id];
+      layer = buildingLayersRef.current[feature.id];
   
-        // If a layer is found, continue with selection handling
-        if (layer) {
-            // Reset previous building selection
-            if (selectedBuildingId && selectedBuildingId !== feature.id) {
-                const prevLayer = buildingLayersRef.current[selectedBuildingId];
-                if (prevLayer) {
-                    prevLayer.setStyle(getBuildingStyle()); // Reset the previous layer's style
-                }
-            }
+      console.log("Building layer:", layer);
   
-            // Update the selected building ID
-            setSelectedBuildingId(feature.id);
-  
-            // Apply the selected style to the current layer
-            layer.setStyle(getSelectedFeatureStyle());
-  
-            // Explicitly open the popup
-            layer.openPopup();
-        } else {
-            console.error("Building layer not found for feature:", feature.id);
+      // If a layer is found, continue with selection handling
+      if (layer) {
+        // Reset previous building selection
+        if (selectedBuildingId && selectedBuildingId !== feature.id) {
+          const prevLayer = buildingLayersRef.current[selectedBuildingId];
+          if (prevLayer) {
+            prevLayer.setStyle(getBuildingStyle()); // Reset the previous layer's style
+          }
         }
+  
+        // Update the selected building ID
+        setSelectedBuildingId(feature.id);
+  
+        // Apply the selected style to the current layer
+        layer.setStyle(getSelectedFeatureStyle());
+  
+        // Create a new popup and set its position to the center of the feature's bounds
+        const popup = L.popup()
+          .setContent(getPopupContent(feature, type))
+          .setLatLng(layer.getBounds().getCenter())
+          .openOn(mapRef.current);
+  
+        // Store the popup reference for later use (optional)
+        layer.popup = popup;
+  
+        console.log("Popup opened for building:", feature.id);
+      } else {
+        console.error("Building layer not found for feature:", feature.id);
+      }
     }
   };
   
+  // Function to create the popup content
+  const getPopupContent = (feature, type) => {
+    const name = feature.properties.name || `Unnamed ${type}`;
+    const highwayType = type === "highway" ? feature.properties.highway : "";
+    const [osmType, osmId] = feature.id.split("/");
+  
+    return `
+      <b>${name}</b><br>
+      Type: ${highwayType || "N/A"}<br>
+      <a href="${getOSMEditorUrl(osmType, osmId)}" target="_blank">Edit this ${type} on OSM</a>
+    `;
+  };
 
   const updateSidebarContent = (index, type) => {
     let feature;
@@ -549,27 +583,47 @@ const getHighwayStyle = (feature) => {
     );
   };
 
-  const nextHighway = () => {
-    if (highways) {
-      setSelectedHighwayIndex((prevIndex) => {
-        const nextIndex = (prevIndex + 1) % highways.features.length;
-  
-        // Trigger map centering on the new highway
-        centerMapOnHighway(nextIndex);
-  
-        // Open the popup for the new highway
-        openPopup(highways.features[nextIndex], "highway");
-  
-        // Update sidebar content
-        updateSidebarContent(nextIndex, "highway");
-  
-        // Trigger rerender for highways
-        setHighwaysRerender((prev) => prev + 1);
-  
-        return nextIndex;
-      });
-    }
-  };
+    const nextHighway = () => {
+
+        if (highways) {
+    
+          setSelectedHighwayIndex((prevIndex) => {
+    
+            const nextIndex = (prevIndex + 1) % highways.features.length;
+    
+      
+    
+            // Trigger map centering on the new highway
+    
+            centerMapOnHighway(nextIndex);
+    
+      
+    
+            // Open the popup for the new highway
+    
+            openPopup(highways.features[nextIndex], "highway");
+    
+      
+    
+            // Update sidebar content
+    
+            updateSidebarContent(nextIndex, "highway");
+    
+      
+    
+            // Trigger rerender for highways
+    
+            setHighwaysRerender((prev) => prev + 1);
+    
+      
+    
+            return nextIndex;
+    
+          });
+    
+        }
+    
+      };
   
   const previousHighway = () => {
     if (highways) {
@@ -601,6 +655,7 @@ const getHighwayStyle = (feature) => {
         centerMapOnBuilding(nextIndex); // Center on the next building
         openPopup(buildings.features[nextIndex], "building"); // Open the popup for the next building
         updateSidebarContent(nextIndex, "building"); // Update sidebar content
+        setSelectedFeature(buildings.features[nextIndex]);
   
         // Trigger rerender for buildings
         setBuildingsRerender((prev) => prev + 1);
@@ -628,7 +683,15 @@ const getHighwayStyle = (feature) => {
   };
 
   return (
+    
     <div className="map-container">
+       <CustomPopupModal
+  feature={selectedFeature}
+  type={selectedFeature ? (selectedFeature.properties.highway ? "highway" : "building") : null}
+  visible={showCustomPopup}
+  onClose={() => setShowCustomPopup(false)}
+  getOSMEditorUrl={getOSMEditorUrl} // Pass the function as a prop
+/>
       <MapContainer
         center={[46.7703, 23.5902]}
         zoom={25}
@@ -701,6 +764,9 @@ const getHighwayStyle = (feature) => {
           <div>Select a highway or building to see details.</div>
         )}
       </div>
+        
+ 
+
   
       {/* Bottom-right panel for next/previous buttons */}
       <div className="bottom-right-panel">
