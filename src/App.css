@@ -87,22 +87,16 @@ body {
 
 @keyframes glow-animation {
   0% {
-    stroke: #00ffff; /* Red stroke */
+    stroke: #00ffff; /* Starting stroke color */
     stroke-width: 7; /* Default stroke width */
-    filter: drop-shadow(0 0 5px rgba(255, 0, 0, 0.7)); /* Glow effect */
-  }
-  50% {
-    stroke: #00fff7; /* Keep the same stroke color */
-    stroke-width: 9; /* Increase stroke width for glow */
-    filter: drop-shadow(0 0 15px rgba(255, 0, 0, 0.7)); /* Increased glow */
+    filter: drop-shadow(0 0 5px rgba(255, 0, 0, 0.7)); /* Initial glow */
   }
   100% {
-    stroke: #00fff7; /* Fade stroke */
-    stroke-width: 12; /* Thicker stroke for glow */
+    stroke: #00fff7; /* End stroke color */
+    stroke-width: 15; /* Thicker stroke for glow */
     filter: drop-shadow(0 0 25px rgba(255, 0, 0, 1)); /* Maximum glow */
   }
 }
-
 
 .pulse {
   position: absolute;
@@ -119,15 +113,12 @@ body {
     transform: scale(12);
     opacity: 1;
   }
-  50% {
-    transform: scale(1222.5);
-    opacity: 0.5;
-  }
   100% {
     transform: scale(122);
     opacity: 1;
   }
 }
+
 /* App.css */
 /* styles.css */
 

@@ -246,6 +246,7 @@ const getHighwayStyle = (feature) => {
     unclassified: "#d3d3d3",
     residential: "#a9a9a9",
     service: "#add8e6",
+    living_street:"#005100",
     footway: "#90ff7a",
     pedestrian: "#6c7b69",
     cycleway: "#1e90ff",
@@ -271,10 +272,12 @@ const getHighwayStyle = (feature) => {
       break;
     case "residential":
     case "service":
+    case "living_street":
       weight = 6; // Thinner lines for residential or service roads
       break;
     case "footway":
     case "cycleway":
+    case "pedestrian":
     case "path":
       weight = 4; // Even thinner lines for paths, footways, cycleways
       break;
@@ -298,9 +301,9 @@ const getHighwayStyle = (feature) => {
       // Return a default style if feature or properties are missing
       return {
         color: "#ff0000", // Default black outline
-        weight: 2, // Default outline weight
+        weight: 1, // Default outline weight
         fillColor: "#ff0000", // Default fill color (gray)
-        fillOpacity: 0.3, // Default opacity
+        fillOpacity: 0.2, // Default opacity
       };
     }
   
@@ -700,7 +703,7 @@ const getHighwayStyle = (feature) => {
         ref={mapRef}
         scrollWheelZoom={true} // Keep scroll zoom enabled
         wheelDebounceTime={0} // Make zooming smoother by adjusting debounce time (default is 40)
-        wheelPxPerZoomLevel={2} // Smoother zoom by increasing scroll sensitivity (default is 60)
+        wheelPxPerZoomLevel={40} // Smoother zoom by increasing scroll sensitivity (default is 60)
       >
         <TileLayer
   url={
@@ -742,18 +745,19 @@ const getHighwayStyle = (feature) => {
       {loading && <div className="loading">Loading...</div>}
       
       <div className="controls">
-        <button onClick={toggleTheme}>
-          {darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-        </button>
+        
         <button onClick={toggleHighways}>
-          {highwaysVisible ? "Hide Highways" : "Show Highways"}
+          {highwaysVisible ? "Hide 🚘" : "Show 🚘"}
         </button>
         <button onClick={toggleBuildings}>
-          {buildingsVisible ? "Hide Buildings" : "Show Buildings"}
+          {buildingsVisible ? "Hide 🏡" : "Show 🏡"}
         </button>
-        <button onClick={toggleDarkMode}>Dark Mode</button>
-        <button onClick={toggleLightMode}>Light Mode</button>
-        <button onClick={toggleSatelliteMode}>Satellite</button>
+        <button onClick={toggleDarkMode}>🌙</button>
+        <button onClick={toggleLightMode}>🌞</button>
+        <button onClick={toggleSatelliteMode}>🛰️</button>
+        <button onClick={toggleTheme}>
+          {darkMode ? "🌞" : "🌙"}
+        </button>
       </div>
   
       {/* Sidebar panel */}
