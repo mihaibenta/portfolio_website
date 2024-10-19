@@ -5,12 +5,14 @@ import osmtogeojson from "osmtogeojson";
 import "./App.css";
 import L from "leaflet"; // Import Leaflet
 import CustomPopupModal from "./CustomPopupModal";
+import "./SmoothZoom"
 
 const MapComponent = () => {
   const [highways, setHighways] = useState(null);
   const [buildings, setBuildings] = useState(null);
-  const [darkMode, setDarkMode] = useState(false);
-  const [satelliteMode, setSatelliteMode] = useState(true);
+  const [trees, setTrees] = useState(null);
+  const [darkMode, setDarkMode] = useState(true);
+  const [satelliteMode, setSatelliteMode] = useState(false);
   const [highwaysVisible, setHighwaysVisible] = useState(true);
   const [buildingsVisible, setBuildingsVisible] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -25,6 +27,14 @@ const MapComponent = () => {
   const [selectedFeature, setSelectedFeature] = useState(null);
   const mapRef = useRef();
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map) {
+      // Enable smooth wheel zoom with center zoom behavior
+      map.smoothWheelZoom.enable();
+    }
+  }, []);
+
   // Store references to feature layers
   const highwayLayersRef = useRef({});
   const buildingLayersRef = useRef({});
@@ -32,15 +42,59 @@ const MapComponent = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      await Promise.all([fetchHighways(), fetchBuildings()]);
+      await Promise.all([fetchHighways(), fetchBuildings(), fetchTrees()]);
       setLoading(false);
     };
+
+    const fetchTrees = async () => {
+      const overpassQuery = `
+        [out:json];
+        area[name="Năsăud"];
+        (
+          node(area)["natural"="tree"];
+        );
+        out body;
+      `;
+    
+      const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(
+        overpassQuery
+      )}`;
+    
+      try {
+        const response = await axios.get(overpassUrl);
+        const geojson = {
+          type: "FeatureCollection",
+          features: response.data.elements.map((element) => ({
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [element.lon, element.lat], // Use lon/lat from Overpass API response
+            },
+            properties: {
+              id: element.id,
+              name: element.tags.name || "Tree", // Optional name, defaulting to "Tree"
+              type: element.tags.natural,
+            },
+          })),
+        };
+        setTrees(geojson); // Set the geojson to state
+      } catch (error) {
+        console.error("Error fetching tree data:", error);
+      }
+    };
+    
 
     const fetchHighways = async () => { 
       const overpassQuery = `
         [out:json];
-        way["highway"](around:2000,46.7703,23.5902);
-        out geom;
+        area[name="Năsăud"];
+        (
+         way(area)[highway];
+        );
+        out body;
+        >;
+        out skel qt;
+
       `;
       const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(
         overpassQuery
@@ -58,8 +112,14 @@ const MapComponent = () => {
     const fetchBuildings = async () => {
       const overpassQuery = `
         [out:json];
-        way["building"](around:2000,46.7703,23.5902);
-        out geom;
+        area[name="Năsăud"];
+        (
+          way(area)["building"];
+        );
+        out body;
+        >;
+        out skel qt;
+
       `;
       const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(
         overpassQuery
@@ -76,6 +136,17 @@ const MapComponent = () => {
 
     fetchData();
   }, []);
+
+  const treeIcon = new L.Icon({
+    iconUrl: '/tree.png', // URL of your tree icon image
+    iconSize: [24, 24], // Size of the icon [width, height]
+    iconAnchor: [12, 24], // The anchor point of the icon (bottom center in this case)
+    popupAnchor: [0, -24], // The anchor point of the popup (relative to the icon)
+  });
+
+  // Function to apply the custom tree icon
+  const getTreeIcon = () => treeIcon;
+  
 
   const toggleTheme = () => {
     setDarkMode(!darkMode);
@@ -123,17 +194,24 @@ const getSelectedFeatureStyle = () => {
 const bindPopupToFeature = (feature, layer, type) => {
   const name = feature.properties.name || `Unnamed ${type}`;
   const [osmType, osmId] = feature.id.split("/");
+  
+  // Get highway-related properties
   const highwayType = type === "highway" ? feature.properties.highway : "";
+  const surface = type === "highway" ? feature.properties.surface || "N/A" : "";
+  const smoothness = type === "highway" ? feature.properties.smoothness || "N/A" : "";
 
+  // Generate the popup content including additional highway tags (surface, smoothness)
   const popupContent = `
     <b>${name}</b><br>
     Type: ${highwayType || "N/A"}<br>
+    Surface: ${surface}<br>
+    Smoothness: ${smoothness}<br>
     <a href="${getOSMEditorUrl(osmType, osmId)}" target="_blank">Edit this ${type} on OSM</a>
   `;
 
   layer.bindPopup(popupContent);
 
-  // Store the layer reference
+  // Store the layer reference and handle style application based on selection
   if (type === "highway") {
     highwayLayersRef.current[feature.id] = layer;
     if (selectedHighwayId === feature.id) {
@@ -150,6 +228,7 @@ const bindPopupToFeature = (feature, layer, type) => {
     }
   }
 
+  // Hover event (mouseover) to highlight feature
   layer.on("mouseover", () => {
     if (
       (type === "highway" && selectedHighwayId !== feature.id) ||
@@ -159,6 +238,7 @@ const bindPopupToFeature = (feature, layer, type) => {
     }
   });
 
+  // Mouseout event to reset style after hover
   layer.on("mouseout", () => {
     if (
       (type === "highway" && selectedHighwayId !== feature.id) ||
@@ -168,6 +248,7 @@ const bindPopupToFeature = (feature, layer, type) => {
     }
   });
 
+  // Click event to handle selection and style updates
   layer.on("click", () => {
     console.log("Layer clicked:", feature.id);
 
@@ -185,7 +266,6 @@ const bindPopupToFeature = (feature, layer, type) => {
     }
     // Handle selection for buildings
     else if (type === "building") {
-      // Reset the style of the previously selected building
       if (selectedBuildingId && selectedBuildingId !== feature.id) {
         const prevLayer = buildingLayersRef.current[selectedBuildingId];
         if (prevLayer) {
@@ -193,15 +273,14 @@ const bindPopupToFeature = (feature, layer, type) => {
           prevLayer.redraw(); // Force redraw
         }
       }
-      // Set new selected building
       setSelectedBuildingId(feature.id);
 
-      // Set style for the currently selected building (turn it red)
+      // Set style for the currently selected building
       const selectedLayer = buildingLayersRef.current[feature.id];
       if (selectedLayer) {
         selectedLayer.setStyle({
-          color: "#7e2e2e", // Keep black outline
-          weight: 2, // Maintain outline weight
+          color: "#7e2e2e", // Black outline
+          weight: 2, // Outline weight
           fillColor: "#FF0000", // Red fill color for selected building
           fillOpacity: 0.4, // High opacity for selected building
         });
@@ -212,9 +291,40 @@ const bindPopupToFeature = (feature, layer, type) => {
   });
 };
 
+const bindTreeToMap = (map) => {
+  if (trees) {
+    L.geoJSON(trees, {
+      pointToLayer: (feature, latlng) => {
+        return L.circleMarker(latlng, getTreeStyle());
+      },
+      onEachFeature: (feature, layer) => {
+        const treeName = feature.properties.name || "Tree";
+        layer.bindPopup(`<b>${treeName}</b><br>Type: Tree`);
+      },
+    }).addTo(map);
+  }
+};
+
+useEffect(() => {
+  if (mapRef.current) {
+    bindTreeToMap(mapRef.current);
+  }
+}, [trees]);
+
+
+
+
+const getTreeStyle = () => {
+  return {
+    color: "#51310035", // Forest green color for trees
+    radius: 4, // Size of the tree point
+    fillOpacity: 5,
+  };
+};
+
+
 
 const getHighwayStyle = (feature) => {
-  // Defensive checks to ensure feature and feature.properties exist
   if (!feature || !feature.properties) {
     // Return a default style if feature or properties are missing
     return {
@@ -230,59 +340,68 @@ const getHighwayStyle = (feature) => {
   let color = "#999999"; // Default color for unknown types
   let weight = 8; // Default weight
   let opacity = 0.7; // Default opacity
+  let dashArray = null; // Dash pattern (used for crossings)
+  let lineCap = "round"; // Default line cap style
 
-  // Define highway colors based on the type
+  // Define highway colors based on smoothness
   const highwayColors = {
-    motorway: "#ff0000",
-    motorway_link: "#cc0000",
-    trunk: "#ff7f00",
-    trunk_link: "#cc7f00",
-    primary: "#ffff00",
-    primary_link: "#cccc00",
-    secondary: "#7fff00",
-    secondary_link: "#66cc00",
-    tertiary: "#00ff00",
-    tertiary_link: "#00cc00",
-    unclassified: "#d3d3d3",
-    residential: "#a9a9a9",
-    service: "#add8e6",
-    living_street:"#005100",
-    footway: "#90ff7a",
-    pedestrian: "#6c7b69",
-    cycleway: "#1e90ff",
-    path: "#897e00",
-    track: "#4f2100",
-    steps: "#696969",
+    excellent: "#0026ff",
+    good: "#00cc5f",
+    intermediate: "#d4ff00",
+    bad: "#ffc400",
+    very_bad: "#ff8400",
+    horrible: "#cc1800",
+    very_horrible: "#8e0000",
+    impassable: "#420000",
   };
 
-  // Apply color based on the highway type
-  if (properties.highway) {
-    color = highwayColors[properties.highway] || "#999999"; // Default to gray if not found
+  // Apply color based on the smoothness
+  if (properties.smoothness) {
+    color = highwayColors[properties.smoothness] || "#999999";
   }
 
-  // Adjust weight based on specific highway types (e.g., thicker for motorways)
+  // Adjust weight and color based on the highway type
   switch (properties.highway) {
     case "motorway":
     case "trunk":
-      weight = 10; // Thicker lines for major roads
+      weight = 10;
       break;
     case "primary":
     case "secondary":
-      weight = 8; // Medium weight for primary and secondary roads
+      weight = 8;
       break;
     case "residential":
     case "service":
     case "living_street":
-      weight = 6; // Thinner lines for residential or service roads
+      weight = 6;
       break;
+
     case "footway":
+      weight = 8; // Default thin line for footways
+      // Check for footway sub-types
+      if (properties.footway === "sidewalk") {
+        color = "#31c500"; // Pink for sidewalks
+        opacity = 1;
+      } else if (properties.footway === "crossing") {
+        color = "#ffffff"; // Orange for crossings
+        weight = 18; // Thicker line for crossings
+        opacity = 1;
+        dashArray = "5, 5"; // Dashed line to symbolize a crossing
+        lineCap = "butt"; // Square end caps for dash segments
+      } else {
+        color = "#00ff2a"; // Green for other footways
+      }
+      break;
+
     case "cycleway":
     case "pedestrian":
     case "path":
-      weight = 4; // Even thinner lines for paths, footways, cycleways
+      weight = 4;
+      color = '#00ff2a'; // Green for paths, footways, cycleways
       break;
+
     default:
-      weight = 8; // Default weight for others
+      weight = 8;
       break;
   }
 
@@ -291,8 +410,11 @@ const getHighwayStyle = (feature) => {
     color: color,
     weight: weight,
     opacity: opacity,
+    dashArray: dashArray, // Use dashArray for crossings
+    lineCap: lineCap, // Apply lineCap to control how dashes are drawn
   };
 };
+
 
 
   const getBuildingStyle = (feature) => {
@@ -300,9 +422,9 @@ const getHighwayStyle = (feature) => {
     if (!feature || !feature.properties) {
       // Return a default style if feature or properties are missing
       return {
-        color: "#ff0000", // Default black outline
-        weight: 1, // Default outline weight
-        fillColor: "#ff0000", // Default fill color (gray)
+        color: "#ff8426", // Default black outline
+        weight: 2, // Default outline weight
+        fillColor: "#000000", // Default fill color (gray)
         fillOpacity: 0.2, // Default opacity
       };
     }
@@ -555,14 +677,19 @@ const getHighwayStyle = (feature) => {
   const getPopupContent = (feature, type) => {
     const name = feature.properties.name || `Unnamed ${type}`;
     const highwayType = type === "highway" ? feature.properties.highway : "";
+    const surface = type === "highway" ? feature.properties.surface || "N/A" : "";
+    const smoothness = type === "highway" ? feature.properties.smoothness || "N/A" : "";
     const [osmType, osmId] = feature.id.split("/");
   
     return `
       <b>${name}</b><br>
       Type: ${highwayType || "N/A"}<br>
+      Surface: ${surface}<br>
+      Smoothness: ${smoothness}<br>
       <a href="${getOSMEditorUrl(osmType, osmId)}" target="_blank">Edit this ${type} on OSM</a>
     `;
   };
+  
 
   const updateSidebarContent = (index, type) => {
     let feature;
@@ -571,20 +698,30 @@ const getHighwayStyle = (feature) => {
     } else {
       feature = buildings.features[index];
     }
+    
     const name = feature.properties.name || `Unnamed ${type}`;
     const highwayType = type === "highway" ? feature.properties.highway : "";
+    const surface = type === "highway" ? feature.properties.surface || "N/A" : "";
+    const smoothness = type === "highway" ? feature.properties.smoothness || "N/A" : "";
     const [osmType, osmId] = feature.id.split("/");
-
+  
     setSidebarContent(
       <div>
         <h3>{name}</h3>
         <p>Type: {highwayType || "N/A"}</p>
+        {type === "highway" && (
+          <>
+            <p>Surface: {surface}</p>
+            <p>Smoothness: {smoothness}</p>
+          </>
+        )}
         <a href={getOSMEditorUrl(osmType, osmId)} target="_blank">
           Edit this {type} on OSM
         </a>
       </div>
     );
   };
+  
 
     const nextHighway = () => {
 
@@ -696,29 +833,44 @@ const getHighwayStyle = (feature) => {
   getOSMEditorUrl={getOSMEditorUrl} // Pass the function as a prop
 />
       <MapContainer
-        center={[46.7703, 23.5902]}
-        zoom={25}
-        maxZoom={18}
+        center={[47.28618343249809, 24.401272639421812]}
+        zoom={19}
+        maxZoom={19}
         style={{ height: "100vh", width: "100%" }}
         ref={mapRef}
-        scrollWheelZoom={true} // Keep scroll zoom enabled
-        wheelDebounceTime={0} // Make zooming smoother by adjusting debounce time (default is 40)
-        wheelPxPerZoomLevel={40} // Smoother zoom by increasing scroll sensitivity (default is 60)
+        scrollWheelZoom={false}
+       
       >
         <TileLayer
   url={
     satelliteMode
-      ? "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+      ? "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
       : darkMode
       ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
   }
+  maxZoom={19} // Ensure max zoom is set to accommodate the tile provider's capabilities
+  opacity={0.5}
   attribution={
     satelliteMode
-      ? 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+      ? 'Google Satellite'
       : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }
 />
+
+ {/* Trees GeoJSON Layer */}
+ {trees && (
+        <GeoJSON
+          key={`trees-${trees.length}`} // Unique key for trees
+          data={trees}
+          pointToLayer={(feature, latlng) => {
+            return L.marker(latlng, { icon: getTreeIcon() }); // Use the custom tree icon
+          }}
+          onEachFeature={(feature, layer) => {
+            layer.bindPopup(`<b>${feature.properties.name}</b><br>Type: Tree`);
+          }}
+        />
+      )}
 
 {highwaysVisible && highways && (
   <GeoJSON

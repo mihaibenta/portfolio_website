@@ -88,12 +88,12 @@ body {
 @keyframes glow-animation {
   0% {
     stroke: #00ffff; /* Starting stroke color */
-    stroke-width: 7; /* Default stroke width */
+    stroke-width: 5; /* Default stroke width */
     filter: drop-shadow(0 0 5px rgba(255, 0, 0, 0.7)); /* Initial glow */
   }
   100% {
     stroke: #00fff7; /* End stroke color */
-    stroke-width: 15; /* Thicker stroke for glow */
+    stroke-width: 10; /* Thicker stroke for glow */
     filter: drop-shadow(0 0 25px rgba(255, 0, 0, 1)); /* Maximum glow */
   }
 }
