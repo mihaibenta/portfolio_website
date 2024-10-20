@@ -48,12 +48,9 @@ const MapComponent = () => {
 
     const fetchTrees = async () => {
       const overpassQuery = `
-        [out:json];
-        area[name="Năsăud"];
-        (
-          node(area)["natural"="tree"];
-        );
-        out body;
+       [out:json];
+          node(around:200, 47.28618343249809, 24.401272639421812)["natural"="tree"];
+          out body;
       `;
     
       const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(
@@ -86,15 +83,11 @@ const MapComponent = () => {
 
     const fetchHighways = async () => { 
       const overpassQuery = `
-        [out:json];
-        area[name="Năsăud"];
-        (
-         way(area)[highway];
-        );
+       [out:json];
+        way(around:200, 47.28618343249809, 24.401272639421812)[highway];
         out body;
         >;
         out skel qt;
-
       `;
       const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(
         overpassQuery
@@ -111,14 +104,12 @@ const MapComponent = () => {
 
     const fetchBuildings = async () => {
       const overpassQuery = `
-        [out:json];
-        area[name="Năsăud"];
-        (
-          way(area)["building"];
-        );
+       [out:json];
+        way(around:200, 47.28618343249809, 24.401272639421812)["building"];
         out body;
         >;
         out skel qt;
+
 
       `;
       const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(
@@ -138,7 +129,7 @@ const MapComponent = () => {
   }, []);
 
   const treeIcon = new L.Icon({
-    iconUrl: '/tree.png', // URL of your tree icon image
+    iconUrl: '/tree_2.png', // URL of your tree icon image
     iconSize: [24, 24], // Size of the icon [width, height]
     iconAnchor: [12, 24], // The anchor point of the icon (bottom center in this case)
     popupAnchor: [0, -24], // The anchor point of the popup (relative to the icon)
@@ -376,22 +367,26 @@ const getHighwayStyle = (feature) => {
       weight = 6;
       break;
 
-    case "footway":
-      weight = 8; // Default thin line for footways
-      // Check for footway sub-types
-      if (properties.footway === "sidewalk") {
-        color = "#31c500"; // Pink for sidewalks
-        opacity = 1;
-      } else if (properties.footway === "crossing") {
-        color = "#ffffff"; // Orange for crossings
-        weight = 18; // Thicker line for crossings
-        opacity = 1;
-        dashArray = "5, 5"; // Dashed line to symbolize a crossing
-        lineCap = "butt"; // Square end caps for dash segments
-      } else {
-        color = "#00ff2a"; // Green for other footways
-      }
-      break;
+      case "footway":
+        weight = 8; // Default thin line for footways
+      
+        // Check for footway sub-types
+        if (properties.footway === "sidewalk") {
+          color = "#d5ffc8"; // Gray color resembling a sidewalk
+          weight = 6; // Thinner line for sidewalks
+          opacity = 1;
+          dashArray = "4, 4"; // Add a dashed line to simulate the sidewalk pattern
+        } else if (properties.footway === "crossing") {
+          color = "#ffffff"; // White for crossings
+          weight = 18; // Thicker line for crossings
+          opacity = 1;
+          dashArray = "5, 5"; // Dashed line to symbolize a crossing
+          lineCap = "butt"; // Square end caps for dash segments
+        } else {
+          color = "#00ff2a"; // Green for other footways
+        }
+        break;
+      
 
     case "cycleway":
     case "pedestrian":
@@ -850,7 +845,7 @@ const getHighwayStyle = (feature) => {
       : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
   }
   maxZoom={19} // Ensure max zoom is set to accommodate the tile provider's capabilities
-  opacity={0.5}
+  opacity={1}
   attribution={
     satelliteMode
       ? 'Google Satellite'
