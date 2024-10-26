@@ -11,10 +11,13 @@ const MapComponent = () => {
   const [highways, setHighways] = useState(null);
   const [buildings, setBuildings] = useState(null);
   const [trees, setTrees] = useState(null);
+  const [stops, setStops] = useState(null);
   const [darkMode, setDarkMode] = useState(true);
   const [satelliteMode, setSatelliteMode] = useState(false);
   const [highwaysVisible, setHighwaysVisible] = useState(true);
   const [buildingsVisible, setBuildingsVisible] = useState(true);
+  const [stopsVisible, setStopsVisible] = useState(true);
+  const [treesVisible, setTreesVisible] = useState(true);
   const [loading, setLoading] = useState(true);
   const [selectedHighwayIndex, setSelectedHighwayIndex] = useState(0);
   const [selectedBuildingIndex, setSelectedBuildingIndex] = useState(0);
@@ -42,14 +45,48 @@ const MapComponent = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      await Promise.all([fetchHighways(), fetchBuildings(), fetchTrees()]);
+      await Promise.all([fetchHighways(), fetchBuildings(), fetchTrees(), fetchStops()]);
       setLoading(false);
+    };
+
+    const fetchStops = async () => {
+      const overpassQuery = `
+       [out:json];
+          node(around:1200, 40.72152531915463, -73.99573857999768)["highway"="stop"];
+          out body;
+      `;
+    
+      const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(
+        overpassQuery
+      )}`;
+    
+      try {
+        const response = await axios.get(overpassUrl);
+        const geojson = {
+          type: "FeatureCollection",
+          features: response.data.elements.map((element) => ({
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: [element.lon, element.lat], // Use lon/lat from Overpass API response
+            },
+            properties: {
+              id: element.id,
+              name: element.tags.name || "Stop", // Optional name, defaulting to "Tree"
+              type: element.tags.natural,
+            },
+          })),
+        };
+        setStops(geojson); // Set the geojson to state
+      } catch (error) {
+        console.error("Error fetching tree data:", error);
+      }
     };
 
     const fetchTrees = async () => {
       const overpassQuery = `
        [out:json];
-          node(around:200, 47.28618343249809, 24.401272639421812)["natural"="tree"];
+          node(around:1200, 40.72152531915463, -73.99573857999768)["natural"="tree"];
           out body;
       `;
     
@@ -84,7 +121,7 @@ const MapComponent = () => {
     const fetchHighways = async () => { 
       const overpassQuery = `
        [out:json];
-        way(around:200, 47.28618343249809, 24.401272639421812)[highway];
+        way(around:1200, 40.72152531915463, -73.99573857999768)[highway];
         out body;
         >;
         out skel qt;
@@ -105,7 +142,7 @@ const MapComponent = () => {
     const fetchBuildings = async () => {
       const overpassQuery = `
        [out:json];
-        way(around:200, 47.28618343249809, 24.401272639421812)["building"];
+        way(around:1200, 40.72152531915463, -73.99573857999768)["building"];
         out body;
         >;
         out skel qt;
@@ -129,7 +166,7 @@ const MapComponent = () => {
   }, []);
 
   const treeIcon = new L.Icon({
-    iconUrl: '/tree_2.png', // URL of your tree icon image
+    iconUrl: '/tree_3.png', // URL of your tree icon image
     iconSize: [24, 24], // Size of the icon [width, height]
     iconAnchor: [12, 24], // The anchor point of the icon (bottom center in this case)
     popupAnchor: [0, -24], // The anchor point of the popup (relative to the icon)
@@ -137,6 +174,16 @@ const MapComponent = () => {
 
   // Function to apply the custom tree icon
   const getTreeIcon = () => treeIcon;
+
+  const stopIcon = new L.Icon({
+    iconUrl: '/stop.png', // URL of your tree icon image
+    iconSize: [24, 24], // Size of the icon [width, height]
+    iconAnchor: [12, 24], // The anchor point of the icon (bottom center in this case)
+    popupAnchor: [0, -24], // The anchor point of the popup (relative to the icon)
+  });
+
+  // Function to apply the custom tree icon
+  const getStopIcon = () => stopIcon;
   
 
   const toggleTheme = () => {
@@ -164,6 +211,14 @@ const MapComponent = () => {
 
   const toggleBuildings = () => {
     setBuildingsVisible(!buildingsVisible);
+  };
+
+  const toggleStops = () => {
+    setStopsVisible(!stopsVisible);
+  };
+ 
+  const toggleTrees = () => {
+    setTreesVisible(!treesVisible);
   };
 
   const getOSMEditorUrl = (osmType, osmId) => {
@@ -280,6 +335,37 @@ const bindPopupToFeature = (feature, layer, type) => {
       console.log("Selected Building ID:", feature.id);
     }
   });
+};
+
+const bindStopToMap = (map) => {
+  if (stops) {
+    L.geoJSON(stops, {
+      pointToLayer: (feature, latlng) => {
+        return L.circleMarker(latlng, getStopStyle());
+      },
+      onEachFeature: (feature, layer) => {
+        const stopName = feature.properties.name || "Stop";
+        layer.bindPopup(`<b>${stopName}</b><br>Type: stop`);
+      },
+    }).addTo(map);
+  }
+};
+
+useEffect(() => {
+  if (mapRef.current) {
+    bindStopToMap(mapRef.current);
+  }
+}, [stops]);
+
+
+
+
+const getStopStyle = () => {
+  return {
+    color: "#ff0000", // Forest green color for trees
+    radius: 4, // Size of the tree point
+    fillOpacity: 5,
+  };
 };
 
 const bindTreeToMap = (map) => {
@@ -718,47 +804,24 @@ const getHighwayStyle = (feature) => {
   };
   
 
-    const nextHighway = () => {
-
-        if (highways) {
+   const nextHighway = () => {
+    if (highways) {
+    setSelectedHighwayIndex((prevIndex) => {
+    const nextIndex = (prevIndex + 1) % highways.features.length;    
+ // Trigger map centering on the new highway
+    centerMapOnHighway(nextIndex);
+     // Open the popup for the new highway
+     openPopup(highways.features[nextIndex], "highway");
+    // Update sidebar content
+    updateSidebarContent(nextIndex, "highway");
+     // Trigger rerender for highways   
+     setHighwaysRerender((prev) => prev + 1);
+     return nextIndex;
+     });
     
-          setSelectedHighwayIndex((prevIndex) => {
+     }
     
-            const nextIndex = (prevIndex + 1) % highways.features.length;
-    
-      
-    
-            // Trigger map centering on the new highway
-    
-            centerMapOnHighway(nextIndex);
-    
-      
-    
-            // Open the popup for the new highway
-    
-            openPopup(highways.features[nextIndex], "highway");
-    
-      
-    
-            // Update sidebar content
-    
-            updateSidebarContent(nextIndex, "highway");
-    
-      
-    
-            // Trigger rerender for highways
-    
-            setHighwaysRerender((prev) => prev + 1);
-    
-      
-    
-            return nextIndex;
-    
-          });
-    
-        }
-    
-      };
+    };
   
   const previousHighway = () => {
     if (highways) {
@@ -828,7 +891,7 @@ const getHighwayStyle = (feature) => {
   getOSMEditorUrl={getOSMEditorUrl} // Pass the function as a prop
 />
       <MapContainer
-        center={[47.28618343249809, 24.401272639421812]}
+        center={[40.72152531915463, -73.99573857999768]}
         zoom={19}
         maxZoom={19}
         style={{ height: "100vh", width: "100%" }}
@@ -841,11 +904,12 @@ const getHighwayStyle = (feature) => {
     satelliteMode
       ? "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
       : darkMode
-      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      ? "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
+      
+      : "https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}{r}.png"
   }
   maxZoom={19} // Ensure max zoom is set to accommodate the tile provider's capabilities
-  opacity={1}
+  
   attribution={
     satelliteMode
       ? 'Google Satellite'
@@ -854,7 +918,7 @@ const getHighwayStyle = (feature) => {
 />
 
  {/* Trees GeoJSON Layer */}
- {trees && (
+ {trees && treesVisible && (
         <GeoJSON
           key={`trees-${trees.length}`} // Unique key for trees
           data={trees}
@@ -866,6 +930,19 @@ const getHighwayStyle = (feature) => {
           }}
         />
       )}
+
+{stops && stopsVisible && (
+        <GeoJSON
+          key={`stops-${stops.length}`} // Unique key for trees
+          data={stops}
+          pointToLayer={(feature, latlng) => {
+            return L.marker(latlng, { icon: getStopIcon() }); // Use the custom tree icon
+          }}
+          onEachFeature={(feature, layer) => {
+            layer.bindPopup(`<b>${feature.properties.name}</b><br>Type: Stops`);
+          }}
+        />
+      )}   
 
 {highwaysVisible && highways && (
   <GeoJSON
@@ -898,6 +975,12 @@ const getHighwayStyle = (feature) => {
         </button>
         <button onClick={toggleBuildings}>
           {buildingsVisible ? "Hide 🏡" : "Show 🏡"}
+        </button>
+        <button onClick={toggleStops}>
+          {stopsVisible ? "Hide 🛑" : "Show 🛑"}
+        </button>
+        <button onClick={toggleTrees}>
+          {treesVisible ? "Hide 🌳" : "Show 🌳"}
         </button>
         <button onClick={toggleDarkMode}>🌙</button>
         <button onClick={toggleLightMode}>🌞</button>
