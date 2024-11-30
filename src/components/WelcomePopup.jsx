@@ -32,10 +32,10 @@ const WelcomePopup = () => {
             This is a <strong>pre-alpha version</strong>. Your feedback is welcome!
           </p>
           <div className="social-links">
-            <a href="https://github.com/your-github-username" target="_blank" rel="noopener noreferrer">
+            <a href="https://github.com/mihaibenta" target="_blank" rel="noopener noreferrer">
               <FaGithub size={30} /> 
             </a>
-            <a href="https://linkedin.com/in/your-linkedin-username" target="_blank" rel="noopener noreferrer">
+            <a href="https://www.linkedin.com/in/mihai-ben%C8%9Ba-69024920b/" target="_blank" rel="noopener noreferrer">
               <FaLinkedin size={30} /> 
             </a>
           </div>
