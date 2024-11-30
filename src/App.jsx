@@ -5,15 +5,16 @@ import osmtogeojson from "osmtogeojson";
 import "./App.css";
 import L from "leaflet"; // Import Leaflet
 import CustomPopupModal from "./CustomPopupModal";
-import "./SmoothZoom"
+import "./SmoothZoom";
+import WelcomePopup from './components/WelcomePopup';
 
 const MapComponent = () => {
   const [highways, setHighways] = useState(null);
   const [buildings, setBuildings] = useState(null);
   const [trees, setTrees] = useState(null);
   const [stops, setStops] = useState(null);
-  const [darkMode, setDarkMode] = useState(true);
-  const [satelliteMode, setSatelliteMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [satelliteMode, setSatelliteMode] = useState(true);
   const [highwaysVisible, setHighwaysVisible] = useState(true);
   const [buildingsVisible, setBuildingsVisible] = useState(true);
   const [stopsVisible, setStopsVisible] = useState(true);
@@ -883,6 +884,7 @@ const getHighwayStyle = (feature) => {
   return (
     
     <div className="map-container">
+      <WelcomePopup />
        <CustomPopupModal
   feature={selectedFeature}
   type={selectedFeature ? (selectedFeature.properties.highway ? "highway" : "building") : null}
